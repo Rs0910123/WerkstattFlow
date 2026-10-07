@@ -263,3 +263,49 @@ führt auf eine saubere 404-Seite.
     npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade:
                       # baut lokal ein Postgres auf und prüft 82 Punkte
                       # (braucht das Paket "postgresql")
+
+## Der Kundenweg (Baustein 2, Teil B) — vollständig
+
+Der Kunde braucht kein Konto. Der ganze Weg läuft über den öffentlichen Link
+der Werkstatt:
+
+1. **Werkstattlink** `/w/<slug>` — Demo-Werkstatt `/w/kfz-werkstatt-berger`
+   (zweiter Mandant: `/w/zweirad-technik-nord`). Derselbe Link ist der Inhalt
+   des QR-Codes, den die Werkstatt in Baustein 3 herunterladen kann.
+2. **Kalender** — freie Tage und Uhrzeiten (erst 24 Stunden im Voraus buchbar),
+   belegte und geschlossene Tage sind gekennzeichnet. Tag anklicken, dann eine
+   Uhrzeit wählen.
+3. **Anfrageformular** (vier Schritte, mobil zuerst, deutsch): 1. Anliegen
+   (Leistung + Beschreibung) · 2. Fahrzeugdaten (Kennzeichen, Marke, Modell,
+   Baujahr, Kilometerstand, Kraftstoff) · 3. Kontaktdaten (Name, E-Mail,
+   Telefon, gewünschte Kontaktart, Pflicht-Einwilligung) · 4. Abschluss mit
+   unverbindlicher Preisschätzung. Tag und Uhrzeit bleiben über alle Schritte
+   erhalten; „Zurück" ändert die Terminwahl nicht. Fehlermeldungen sind deutsch
+   und stehen direkt am Feld, eingegebene Werte bleiben erhalten.
+4. **Absenden** — die Server Action (`src/lib/actions/anfrage.ts`) ruft
+   `public.create_public_request(...)` auf. Der Mandant wird allein über den
+   Slug bestimmt. Die Preisschätzung berechnet der Server neu; Werte aus dem
+   Browser werden verworfen. Spamschutz: Honeypot-Feld und Ratenbegrenzung
+   (zusätzlich in der Datenbank: eine Anfrage pro Minute, höchstens fünf pro
+   Stunde).
+5. **Erfolg** — Weiterleitung auf `/status/<token>?neu=1` mit Referenznummer,
+   Hinweis auf die Bestätigung per E-Mail und dem Link zum Abspeichern.
+6. **Statusseite** `/status/<token>` — jederzeit abrufbar: Stand in
+   verständlichem Deutsch (neu / bestätigt / abgelehnt / abgeschlossen /
+   storniert), Referenznummer, Wunsch- bzw. bestätigter Termin, Anliegen,
+   Werkstatt mit Kontaktdaten und die nächsten Schritte. Der Token ist der
+   einzige Zugang: falsches Format oder unbekannter Token ergeben eine saubere
+   deutsche 404-Seite, niemals Daten einer anderen Anfrage.
+
+**Noch nicht enthalten:** E-Mail- und SMS-Versand. Die Bestätigungs-E-Mail nach
+der Anfrage und der SMS-Link für den Anruf-Webhook kommen in **Baustein 4**. Die
+Statusseite weist darauf hin; die Stelle im Code ist vorbereitet (Kommentar an
+der Weiterleitung in `src/lib/actions/anfrage.ts`; `statusLink()`,
+`RESEND_API_KEY`, `EMAIL_FROM`, `TWILIO_*` stehen schon in `.env.example`).
+
+### Ohne Supabase-Zugangsdaten
+
+Kalender und Formular sind dann nicht nutzbar. `/w/<slug>` und `/status/<token>`
+zeigen den deutschen Hinweis „Supabase ist noch nicht verbunden"; das Absenden
+meldet „Das Kundenportal ist noch nicht mit der Datenbank verbunden" und
+speichert nichts.
