@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   formatiereDatumKurz,
   formatiereDatumLang,
@@ -23,6 +23,10 @@ import {
  * Der Kalender rechnet NICHT selbst: Er bekommt die fertig berechneten Tage
  * (freie/belegte/geschlossene Tage samt Slots) von der Serverseite und zeigt sie
  * nur an. Damit gibt es keine zweite Wahrheit über freie Termine.
+ *
+ * Die Auswahl ist gesteuert (controlled): Tag und Slot gehören dem übergeordneten
+ * TerminFlow, damit die Auswahl beim Wechsel in das Anfrageformular erhalten
+ * bleibt. Nur der angezeigte Monat ist Zustand dieses Bausteins.
  */
 
 const WOCHENTAGE_KURZ = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -31,10 +35,18 @@ export function Kalender({
   tage,
   heute,
   werkstattName,
+  gewaehlterTag,
+  gewaehlterSlot,
+  onTagWaehlen,
+  onSlotWaehlen,
 }: {
   tage: Tagesangebot[];
   heute: string;
   werkstattName: string;
+  gewaehlterTag: string | null;
+  gewaehlterSlot: TerminSlot | null;
+  onTagWaehlen: (datum: string | null) => void;
+  onSlotWaehlen: (slot: TerminSlot | null) => void;
 }) {
   const nachDatum = useMemo(() => {
     const karte = new Map<string, Tagesangebot>();
@@ -44,8 +56,6 @@ export function Kalender({
 
   const [jahr, setJahr] = useState(() => Number(heute.slice(0, 4)));
   const [monat, setMonat] = useState(() => Number(heute.slice(5, 7)));
-  const [gewaehlterTag, setGewaehlterTag] = useState<string | null>(null);
-  const [gewaehlterSlot, setGewaehlterSlot] = useState<TerminSlot | null>(null);
 
   const raster = useMemo(() => monatsRaster(jahr, monat), [jahr, monat]);
 
@@ -63,8 +73,8 @@ export function Kalender({
     } else {
       setMonat(neuerMonat);
     }
-    setGewaehlterSlot(null);
-    setGewaehlterTag(null);
+    onSlotWaehlen(null);
+    onTagWaehlen(null);
   }
 
   const monatsAnfang = `${jahr}-${String(monat).padStart(2, "0")}-01`;
@@ -154,8 +164,8 @@ export function Kalender({
               disabled={!frei}
               aria-label={`${formatiereDatumLang(datum)}: ${grund}`}
               onClick={() => {
-                setGewaehlterTag(datum);
-                setGewaehlterSlot(null);
+                onTagWaehlen(datum);
+                onSlotWaehlen(null);
               }}
               className={[
                 "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-xs transition",
@@ -207,7 +217,7 @@ export function Kalender({
                   key={slot.startMinute}
                   type="button"
                   disabled={!slot.frei}
-                  onClick={() => setGewaehlterSlot(slot)}
+                  onClick={() => onSlotWaehlen(slot)}
                   className={[
                     "rounded-md border px-3 py-1.5 text-sm transition",
                     slot.frei
@@ -233,13 +243,20 @@ export function Kalender({
                 {formatiereSlot(gewaehlterSlot.startMinute, gewaehlterSlot.endMinute)}
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                Im nächsten Schritt führt diese Auswahl direkt in das
-                Anfrageformular mit Fahrzeugdaten und Preisschätzung. Der
-                Formularschritt folgt in Kürze — bis dahin nimmt{" "}
-                {werkstattName} Ihren Wunschtermin gern telefonisch entgegen.
+                Diese Auswahl ist gemerkt und steht unten im Anfrageformular bei{" "}
+                {werkstattName} bereit. Sie können den Termin dort jederzeit
+                ändern, indem Sie einen anderen Slot wählen.
               </p>
-              <Button type="button" className="mt-4" disabled>
-                Weiter zur Anfrage (folgt)
+              <Button
+                type="button"
+                className="mt-4"
+                onClick={() => {
+                  document
+                    .getElementById("anfrage")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                Zum Anfrageformular
               </Button>
             </div>
           )}

@@ -20,6 +20,12 @@ export const HONEYPOT_FELD = "website";
 /** Pflicht-Checkbox zur Kontaktaufnahme (Datenschutz). */
 export const EINWILLIGUNG_FELD = "einwilligung";
 
+/** Meldungen zur Kombination E-Mail/Telefon (an zwei Stellen verwendet). */
+export const TEXT_EMAIL_ODER_TELEFON =
+  "Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit die Werkstatt Sie erreichen kann.";
+export const TEXT_TELEFON_ERFORDERLICH =
+  "E-Mail-Adresse oder Telefonnummer ist erforderlich.";
+
 export const KONTAKTWEGE = ["email", "telefon", "sms"] as const;
 export type Kontaktweg = (typeof KONTAKTWEGE)[number];
 
@@ -254,13 +260,12 @@ export function parseAnfrageFormular(
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["email"],
-          message:
-            "Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit die Werkstatt Sie erreichen kann.",
+          message: TEXT_EMAIL_ODER_TELEFON,
         });
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["phone"],
-          message: "E-Mail-Adresse oder Telefonnummer ist erforderlich.",
+          message: TEXT_TELEFON_ERFORDERLICH,
         });
       }
       if (werte.contact_preference !== "email" && !werte.phone) {
@@ -281,6 +286,15 @@ export function parseAnfrageFormular(
       const feld = String(problem.path[0] ?? "formular");
       if (!fehler[feld]) fehler[feld] = problem.message;
     }
+
+    // Die Verfeinerung oben (E-Mail ODER Telefon) läuft nur, wenn die Felder
+    // selbst gültig sind. Damit der Kunde sie auch zusammen mit anderen
+    // Fehlern sieht, wird sie hier zusätzlich geprüft.
+    if (text(eingabe.email) === "" && text(eingabe.phone) === "") {
+      if (!fehler.email) fehler.email = TEXT_EMAIL_ODER_TELEFON;
+      if (!fehler.phone) fehler.phone = TEXT_TELEFON_ERFORDERLICH;
+    }
+
     return { erfolg: false, fehler };
   }
 

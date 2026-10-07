@@ -15,6 +15,10 @@ import {
   type Verfuegbarkeitsregel,
 } from "./kalender.ts";
 import { datumPlusTage, jetztInZeitzone } from "./format.ts";
+import { normalisiereToken } from "./token.ts";
+import type { AbsendeErgebnis } from "./anfrage.ts";
+import type { AnfrageDaten } from "./anfrage-schema.ts";
+import type { Preisschaetzung } from "./preisschaetzung.ts";
 
 /**
  * Öffentlicher Datenzugriffspfad des Kundenportals (serverseitig, eng gefasst).
@@ -47,6 +51,63 @@ export type OeffentlicheWerkstatt = {
   tage: Tagesangebot[];
   naechsteFreie: Tagesangebot[];
   oeffnungszeiten: OeffnungszeitenBild;
+};
+
+/** Eine einzelne Anfrage für die Statusseite des Kunden (ohne Fremddaten). */
+export type OeffentlicheAnfrage = {
+  reference: string;
+  status: string;
+  serviceType: string | null;
+  description: string | null;
+  preferredDateFrom: string | null;
+  preferredDateTo: string | null;
+  preferredTimeNote: string | null;
+  estimatedPriceMin: number | null;
+  estimatedPriceMax: number | null;
+  priceEstimateNote: string | null;
+  rejectionReason: string | null;
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  appointmentStartsAt: string | null;
+  appointmentEndsAt: string | null;
+  workshopName: string | null;
+  workshopSlug: string | null;
+  workshopPhone: string | null;
+  workshopEmail: string | null;
+  workshopStreet: string | null;
+  workshopPostalCode: string | null;
+  workshopCity: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  decidedAt: string | null;
+};
+
+type AnfrageZeile = {
+  reference: string;
+  status: string;
+  service_type: string | null;
+  description: string | null;
+  preferred_date_from: string | null;
+  preferred_date_to: string | null;
+  preferred_time_note: string | null;
+  estimated_price_min: number | null;
+  estimated_price_max: number | null;
+  price_estimate_note: string | null;
+  rejection_reason: string | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  appointment_starts_at: string | null;
+  appointment_ends_at: string | null;
+  workshop_name: string | null;
+  workshop_slug: string | null;
+  workshop_phone: string | null;
+  workshop_email: string | null;
+  workshop_street: string | null;
+  workshop_postal_code: string | null;
+  workshop_city: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  decided_at: string | null;
 };
 
 type WerkstattZeile = {
@@ -159,4 +220,108 @@ export async function ladeOeffentlicheWerkstatt(
     naechsteFreie: naechsteFreieTage(tage, 3),
     oeffnungszeiten: beschreibeOeffnungszeiten(regeln),
   };
+}
+
+/**
+ * Eine einzelne Anfrage anhand ihres öffentlichen Tokens laden (Statusseite).
+ * `null` = unbekannter Token, kein Supabase oder technischer Fehler. Die
+ * Datenbankfunktion liefert höchstens EINE Anfrage — fremde Daten können so
+ * nicht über die Statusseite sichtbar werden.
+ */
+export async function ladeOeffentlicheAnfrage(
+  token: string,
+): Promise<OeffentlicheAnfrage | null> {
+  const sauber = normalisiereToken(token);
+  if (!sauber) return null;
+  if (!isSupabaseConfigured) return null;
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) return null;
+
+  const { data, error } = await supabase.rpc("get_public_request", {
+    p_token: sauber,
+  });
+  if (error) return null;
+
+  const zeile = (data as AnfrageZeile[] | null)?.[0];
+  if (!zeile) return null;
+
+  return {
+    reference: zeile.reference,
+    status: zeile.status,
+    serviceType: zeile.service_type,
+    description: zeile.description,
+    preferredDateFrom: zeile.preferred_date_from,
+    preferredDateTo: zeile.preferred_date_to,
+    preferredTimeNote: zeile.preferred_time_note,
+    estimatedPriceMin: zeile.estimated_price_min,
+    estimatedPriceMax: zeile.estimated_price_max,
+    priceEstimateNote: zeile.price_estimate_note,
+    rejectionReason: zeile.rejection_reason,
+    vehicleMake: zeile.vehicle_make,
+    vehicleModel: zeile.vehicle_model,
+    appointmentStartsAt: zeile.appointment_starts_at,
+    appointmentEndsAt: zeile.appointment_ends_at,
+    workshopName: zeile.workshop_name,
+    workshopSlug: zeile.workshop_slug,
+    workshopPhone: zeile.workshop_phone,
+    workshopEmail: zeile.workshop_email,
+    workshopStreet: zeile.workshop_street,
+    workshopPostalCode: zeile.workshop_postal_code,
+    workshopCity: zeile.workshop_city,
+    createdAt: zeile.created_at,
+    updatedAt: zeile.updated_at,
+    decidedAt: zeile.decided_at,
+  };
+}
+
+/**
+ * Anfrage anlegen — der einzige Schreibweg für nicht angemeldete Besucher.
+ * Der Mandant wird allein über den Slug bestimmt; Kunden-, Fahrzeug- und
+ * Anfragedatensatz entstehen in der Datenbankfunktion (Baustein 2, Migration
+ * 20260101000400). Die Preisspanne kommt fertig berechnet herein.
+ *
+ * Der Fehler wird NICHT hier übersetzt, sondern in src/lib/portal/anfrage.ts
+ * (uebersetzeDbFehler) — so bleibt die Übersetzung testbar.
+ */
+export async function sendeOeffentlicheAnfrage(anfrage: {
+  slug: string;
+  daten: AnfrageDaten;
+  zeitnotiz: string;
+  preis: Preisschaetzung | null;
+}): Promise<AbsendeErgebnis> {
+  if (!isSupabaseConfigured) {
+    return { fehler: { message: "datenbank_nicht_verbunden" } };
+  }
+
+  const supabase = await createSupabaseServerClient();
+  if (!supabase) {
+    return { fehler: { message: "datenbank_nicht_verbunden" } };
+  }
+
+  const { daten, preis, zeitnotiz } = anfrage;
+
+  const { data, error } = await supabase.rpc("create_public_request", {
+    p_slug: anfrage.slug,
+    p_service_type: daten.service_type,
+    p_description: daten.description,
+    p_preferred_date: daten.preferred_date,
+    p_preferred_time_note: zeitnotiz,
+    p_first_name: daten.first_name,
+    p_last_name: daten.last_name,
+    p_email: daten.email,
+    p_phone: daten.phone,
+    p_contact_preference: daten.contact_preference,
+    p_vehicle_make: daten.vehicle_make,
+    p_vehicle_model: daten.vehicle_model,
+    p_vehicle_year: daten.vehicle_year,
+    p_vehicle_mileage: daten.vehicle_mileage,
+    p_license_plate: daten.license_plate,
+    p_estimated_price_min: preis?.min ?? null,
+    p_estimated_price_max: preis?.max ?? null,
+    p_price_estimate_note: preis ? preis.hinweis : null,
+  });
+
+  if (error) return { fehler: { message: error.message } };
+  return { fehler: null, data };
 }

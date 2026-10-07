@@ -22,6 +22,7 @@ import { LEISTUNGSARTEN } from "@/lib/portal/leistungen.ts";
 import { formatierePreisAb } from "@/lib/portal/preisschaetzung.ts";
 
 import { Kalender, NaechsteFreieTage } from "./kalender";
+import { TerminFlow } from "./termin-flow";
 
 /**
  * Öffentliche Seite einer Werkstatt: /w/<slug>
@@ -141,10 +142,13 @@ export default async function WerkstattSeite({
           </p>
 
           <div className="mt-8">
-            <Kalender
-              tage={werkstatt.tage}
+            <TerminFlow
+              slug={werkstatt.slug}
+              zeitzone={werkstatt.zeitzone}
               heute={werkstatt.heute}
+              tage={werkstatt.tage}
               werkstattName={werkstatt.name}
+              leistungen={LEISTUNGSARTEN}
             />
           </div>
         </section>
