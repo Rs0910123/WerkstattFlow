@@ -199,3 +199,67 @@ Bestätigungs-E-Mail anklicken.
 **Keine Daten im Dashboard?**
 Das Dashboard liest echte Daten aus der Datenbank. Ohne eingespielten Seed ist
 es leer.
+
+## Kundenportal: die öffentliche Werkstattseite
+
+Jede Werkstatt hat eine öffentliche Adresse nach dem Muster:
+
+    /w/<slug>
+
+Die Beispiel-Werkstatt aus den Demo-Daten ist erreichbar unter:
+
+    /w/kfz-werkstatt-berger        (Demo-Login: demo@kfz-berger.de / Werkstatt2026!)
+    /w/zweirad-technik-nord        (zweiter Mandant, nur zum Prüfen der Datentrennung)
+
+Der Slug steht in der Tabelle `companies.slug` und wird beim Registrieren
+vergeben (Kleinbuchstaben, Zahlen, Bindestriche).
+
+**Der Weg für Kundinnen und Kunden:** Startseite der Werkstatt öffnen → Kalender
+mit den freien Tagen ansehen → Tag und Uhrzeit auswählen. Das Mehrschrittformular
+mit Fahrzeugdaten und Preisschätzung sowie die Statusseite `/status/<token>`
+folgen als nächster Schritt (Baustein 2, Teil B).
+
+**Wenn noch nichts zu sehen ist:** Solange Supabase nicht verbunden ist (siehe
+Abschnitt „Supabase verbinden“), zeigt die Seite einen deutschen Hinweis statt
+eines Fehlers. Ein unbekannter Slug führt auf eine saubere 404-Seite.
+
+### Prüfen und testen (ohne Supabase)
+
+    npm test          # 72 Tests der Logikschicht (Kalender, Preisschätzung,
+                      # Formularprüfung, Token, Farbe, Formatierung)
+    npx tsc --noEmit  # Typecheck
+    npm run build     # Production-Build (Vercel-fähig)
+    npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade:
+                      # baut lokal ein Postgres auf und prüft 82 Punkte
+
+`npm run rls:check` braucht ein lokales PostgreSQL (Paket `postgresql`).
+
+## Kundenportal: die öffentliche Werkstattseite
+
+Jede Werkstatt hat eine öffentliche Adresse nach dem Muster `/w/<slug>`.
+Die Beispiel-Werkstatt aus den Demo-Daten:
+
+    /w/kfz-werkstatt-berger     (Demo-Login: demo@kfz-berger.de / Werkstatt2026!)
+    /w/zweirad-technik-nord     (zweiter Mandant, zum Prüfen der Datentrennung)
+
+Der Slug steht in `companies.slug` und wird beim Registrieren vergeben
+(Kleinbuchstaben, Zahlen, Bindestriche).
+
+**Der Weg für Kundinnen und Kunden:** Werkstattseite öffnen → Kalender mit den
+freien Tagen ansehen → Tag und Uhrzeit auswählen. Das Mehrschrittformular mit
+Fahrzeugdaten und Preisschätzung sowie die Statusseite `/status/<token>` folgen
+als nächster Schritt (Baustein 2, Teil B).
+
+**Wenn noch nichts zu sehen ist:** Solange Supabase nicht verbunden ist, zeigt
+die Seite einen deutschen Hinweis statt eines Fehlers. Ein unbekannter Slug
+führt auf eine saubere 404-Seite.
+
+### Prüfen und testen (ohne Supabase)
+
+    npm test          # 72 Tests der Logikschicht (Kalender, Preisschätzung,
+                      # Formularprüfung, Token, Farbe, Formatierung)
+    npx tsc --noEmit  # Typecheck
+    npm run build     # Production-Build (Vercel-fähig)
+    npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade:
+                      # baut lokal ein Postgres auf und prüft 82 Punkte
+                      # (braucht das Paket "postgresql")
