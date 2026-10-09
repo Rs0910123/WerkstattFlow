@@ -39,9 +39,8 @@ import {
   termineAmTag,
   uhrzeitZuMinuten,
   verfuegbareAktionen,
-  type AnfrageStatus,
 } from "../../src/lib/dashboard/anfragen.ts";
-import { STATUS_BESCHRIFTUNG } from "../../src/types/database.ts";
+import { STATUS_BESCHRIFTUNG, type AnfrageStatus } from "../../src/types/database.ts";
 
 const ALLE_STATUS: AnfrageStatus[] = [
   "neu",
