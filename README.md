@@ -225,44 +225,67 @@ eines Fehlers. Ein unbekannter Slug führt auf eine saubere 404-Seite.
 
 ### Prüfen und testen (ohne Supabase)
 
-    npm test          # 72 Tests der Logikschicht (Kalender, Preisschätzung,
-                      # Formularprüfung, Token, Farbe, Formatierung)
+    npm test          # 158 Tests der Logikschicht (Kalender, Preisschätzung,
+                      # Formularprüfung, Token, Farbe, Formatierung sowie
+                      # Statusübergänge, Terminprüfung und Inbox des Dashboards)
     npx tsc --noEmit  # Typecheck
     npm run build     # Production-Build (Vercel-fähig)
-    npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade:
-                      # baut lokal ein Postgres auf und prüft 82 Punkte
+    npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade +
+                      # Bearbeiten im Werkstatt-Dashboard:
+                      # baut lokal ein Postgres auf und prüft 123 Punkte
 
 `npm run rls:check` braucht ein lokales PostgreSQL (Paket `postgresql`).
 
-## Kundenportal: die öffentliche Werkstattseite
+**Zwei Werkstätten zum Prüfen der Datentrennung:** Die Demo-Daten enthalten die
+Kfz-Werkstatt Berger und den zweiten Mandanten „Zweirad Technik Nord“. Beide
+sehen ausschließlich ihre eigenen Anfragen — der Datenbankschutz (Row Level
+Security) wird mit `npm run rls:check` nachgewiesen.
 
-Jede Werkstatt hat eine öffentliche Adresse nach dem Muster `/w/<slug>`.
-Die Beispiel-Werkstatt aus den Demo-Daten:
+## Der Werkstatt-Weg (Baustein 3, Teil A)
 
-    /w/kfz-werkstatt-berger     (Demo-Login: demo@kfz-berger.de / Werkstatt2026!)
-    /w/zweirad-technik-nord     (zweiter Mandant, zum Prüfen der Datentrennung)
+Nach dem Einloggen arbeitet die Werkstatt hier:
 
-Der Slug steht in `companies.slug` und wird beim Registrieren vergeben
-(Kleinbuchstaben, Zahlen, Bindestriche).
+1. **Einloggen** — `/login`. Demo-Zugang der Beispieldaten:
+   `demo@kfz-berger.de` / `Werkstatt2026!`. Ohne gültige Anmeldung leitet jede
+   Dashboard-Seite auf `/login` um; Daten werden dabei nicht ausgeliefert.
+2. **Übersicht** — `/dashboard`. Begrüßung, die wichtigsten Zahlen (offene,
+   bestätigte, abgelehnte, abgeschlossene und stornierte Anfragen), die
+   nächsten Termine und die zuletzt eingegangenen Anfragen.
+3. **Inbox** — `/dashboard/anfragen`. Alle Anfragen der eigenen Werkstatt,
+   neueste zuerst. Filter nach Status (Alle, Neu, Bestätigt, Abgelehnt,
+   Abgeschlossen, Storniert) und Umschalten der Sortierung (neueste/älteste
+   zuerst); beides steht in der Adresszeile und bleibt beim Neuladen erhalten.
+   Jede Zeile zeigt Eingang („vor 4 Stunden“), Anliegen, Fahrzeug, Wunschtermin
+   und Status.
+4. **Anfrage öffnen** — `/dashboard/anfragen/<id>`. Kundendaten, Fahrzeug,
+   Beschreibung, Wunschtermin, Preisschätzung und Kontaktwunsch; rechts die
+   passenden Aktionen für den aktuellen Status.
+5. **Bestätigen mit Terminvergabe** — Datum, Uhrzeit (HH:MM), Dauer, Bühne und
+   Notiz. Die Oberfläche prüft Datum, Uhrzeit und Dauer sowie Kollisionen mit
+   bereits vergebenen Terminen und meldet auf Deutsch, welcher Termin im Weg
+   steht. Die Datenbank prüft dasselbe noch einmal und legt Statuswechsel und
+   Termin in **einer** Transaktion an — eine „bestätigte“ Anfrage ohne Termin
+   kann es nicht geben.
+6. **Ablehnen mit Begründung** — die Begründung ist Pflicht; der Kunde sieht
+   sie auf seiner Statusseite `/status/<token>`.
+7. **Abschließen oder stornieren** — nach der Durchführung bzw. wenn der Auftrag
+   zurückgezogen wird. Der zugehörige Termin wird mitgeführt (abgeschlossen
+   bzw. abgesagt, der Slot wird damit wieder frei).
+8. **Nicht erlaubte Schritte** — jede Aktion ist nur aus dem passenden
+   Ausgangsstatus möglich (entschieden wird nur aus „Neu“). Ist die Anfrage
+   inzwischen bearbeitet, erscheint ein deutscher Hinweis („Die Anfrage wurde
+   inzwischen bearbeitet …“) statt einer stillen Änderung.
 
-**Der Weg für Kundinnen und Kunden:** Werkstattseite öffnen → Kalender mit den
-freien Tagen ansehen → Tag und Uhrzeit auswählen. Das Mehrschrittformular mit
-Fahrzeugdaten und Preisschätzung sowie die Statusseite `/status/<token>` folgen
-als nächster Schritt (Baustein 2, Teil B).
+**Ohne Supabase-Zugangsdaten:** `/dashboard` und alle Unterseiten leiten auf
+`/login` um; die Login-Seite zeigt den deutschen Hinweis, dass Supabase noch
+nicht verbunden ist. Es werden keine Werkstattdaten angezeigt. Mit echten
+Zugangsdaten ist die Anmeldung erst nach Schritt 3 und 4 (Zugangsdaten +
+Datenbank) möglich.
 
-**Wenn noch nichts zu sehen ist:** Solange Supabase nicht verbunden ist, zeigt
-die Seite einen deutschen Hinweis statt eines Fehlers. Ein unbekannter Slug
-führt auf eine saubere 404-Seite.
-
-### Prüfen und testen (ohne Supabase)
-
-    npm test          # 72 Tests der Logikschicht (Kalender, Preisschätzung,
-                      # Formularprüfung, Token, Farbe, Formatierung)
-    npx tsc --noEmit  # Typecheck
-    npm run build     # Production-Build (Vercel-fähig)
-    npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade:
-                      # baut lokal ein Postgres auf und prüft 82 Punkte
-                      # (braucht das Paket "postgresql")
+Zum Nachlesen im Code: Die Logik (Statusübergänge, Kollisionsprüfung, Filter,
+Sortierung, Kennzahlen, Anzeigetexte) steht in `src/lib/dashboard/anfragen.ts`
+und ist mit `npm test` abgedeckt; die Datenbank-Funktionen liegen in
+`supabase/migrations/20260101000500_dashboard_request_actions.sql`.
 
 ## Der Kundenweg (Baustein 2, Teil B) — vollständig
 
