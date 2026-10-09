@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/portal/*.test.ts",
+    "test": "node --test tests/portal/*.test.ts tests/dashboard/*.test.ts",
     "rls:check": "bash scripts/rls-check.sh",
     "db:types": "supabase gen types typescript --local > src/types/database.ts"
   },

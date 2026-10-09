@@ -15,7 +15,7 @@
 
 // Bewusst relativ (nicht über "@/..."), damit die Datei auch unter
 // `node --test` ohne Pfad-Alias-Support direkt ladbar ist.
-import { STATUS_BESCHRIFTUNG, type AnfrageStatus } from "../../types/database";
+import { STATUS_BESCHRIFTUNG, type AnfrageStatus } from "../../types/database.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Filter und Sortierung                                                      */
