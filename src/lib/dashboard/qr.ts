@@ -434,13 +434,16 @@ function setzeFormat(
 ): void {
   const bits = formatBits(stufe, maske);
   const bit = (index: number) => ((bits >> index) & 1) === 1;
-  for (let i = 0; i <= 5; i += 1) module[i][8] = bit(i);
-  module[7][8] = bit(6);
+  // Erste Kopie: Bit 0–5 in Zeile 8 links, dann Bit 6/7/8 um die Ecke, Bit 9–14
+  // in Spalte 8 nach oben.
+  for (let i = 0; i <= 5; i += 1) module[8][i] = bit(i);
+  module[8][7] = bit(6);
   module[8][8] = bit(7);
-  module[8][7] = bit(8);
-  for (let i = 9; i < 15; i += 1) module[8][14 - i] = bit(i);
-  for (let i = 0; i < 8; i += 1) module[8][groesse - 1 - i] = bit(i);
-  for (let i = 8; i < 15; i += 1) module[groesse - 15 + i][8] = bit(i);
+  module[7][8] = bit(8);
+  for (let i = 9; i < 15; i += 1) module[14 - i][8] = bit(i);
+  // Zweite Kopie: Bit 0–7 unter dem Suchermuster rechts, Bit 8–14 oben rechts.
+  for (let i = 0; i < 8; i += 1) module[groesse - 1 - i][8] = bit(i);
+  for (let i = 8; i < 15; i += 1) module[8][groesse - 15 + i] = bit(i);
   module[groesse - 8][8] = true; // festes dunkles Modul
 }
 
@@ -654,12 +657,8 @@ export function qrAlsSvg(text: string, optionen: SvgOptionen = {}): string {
     optionen.stufe === undefined
       ? erzeugeQrMatrix(text)
       : erzeugeQrMatrix(text, { stufe: optionen.stufe });
-  const rand = Number.isFinite(optionen.rand) && (optionen.rand ?? 0) >= 0
-    ? Math.floor(optionen.rand as number)
-    : 4;
-  const modul = Number.isFinite(optionen.modulGroesse)
-    ? Math.max(1, Math.floor(optionen.modulGroesse as number))
-    : 8;
+  const rand = ruhezone(optionen.rand);
+  const modul = modulGroesse(optionen.modulGroesse);
   const kante = (matrix.groesse + rand * 2) * modul;
   const farbe = optionen.farbe ?? "#0f172a";
   const hintergrund = optionen.hintergrund ?? "#ffffff";
@@ -703,16 +702,193 @@ function entkomme(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/* -------------------------------------------------------------------------- */
+/* PNG-Ausgabe — ebenfalls ohne Fremdbibliothek                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * PNG-Darstellung des QR-Codes (1 Bit Graustufen, schwarz auf weiß).
+ *
+ * Warum ein eigener PNG-Schreiber? Der Download darf auch im Browser ohne
+ * Canvas und ohne zlib-Abhängigkeit entstehen. Ein PNG braucht nur drei
+ * Chunks (IHDR, IDAT, IEND), CRC-32 über jeden Chunk, Adler-32 als Prüfsumme
+ * und einen Deflate-Strom — hier mit unkomprimierten Blöcken (BTYPE 00), was
+ * jeder Betrachter und jeder Scanner liest und für ein 500×500-Bild völlig
+ * ausreicht.
+ *
+ * Graustufen mit 1 Bit Tiefe ist das robusteste Format für Scanner: keine
+ * Farbprofile, keine Alphakanäle, harte Kanten.
+ */
+export function qrAlsPng(text: string, optionen: SvgOptionen = {}): Uint8Array {
+  const matrix =
+    optionen.stufe === undefined
+      ? erzeugeQrMatrix(text)
+      : erzeugeQrMatrix(text, { stufe: optionen.stufe });
+  const rand = ruhezone(optionen.rand);
+  const modul = modulGroesse(optionen.modulGroesse);
+  const seiten = matrix.groesse + rand * 2;
+  const kante = seiten * modul;
+  const zeilenBytes = Math.ceil(kante / 8);
+
+  // Rohbild: je Zeile ein Filterbyte (0 = None) und die Pixelbits, MSB zuerst.
+  // 1 = weiß, 0 = schwarz (so definiert es das Graustufenformat).
+  const roh = new Uint8Array((zeilenBytes + 1) * kante);
+  roh.fill(0xff);
+  for (let zeile = 0; zeile < kante; zeile += 1) roh[zeile * (zeilenBytes + 1)] = 0;
+
+  const schwärze = (px: number, py: number) => {
+    roh[py * (zeilenBytes + 1) + 1 + (px >> 3)] &= ~(0x80 >> (px & 7)) & 0xff;
+  };
+  for (let zeile = 0; zeile < matrix.groesse; zeile += 1) {
+    for (let spalte = 0; spalte < matrix.groesse; spalte += 1) {
+      if (!matrix.module[zeile][spalte]) continue;
+      for (let dy = 0; dy < modul; dy += 1) {
+        const py = (zeile + rand) * modul + dy;
+        for (let dx = 0; dx < modul; dx += 1) {
+          schwärze((spalte + rand) * modul + dx, py);
+        }
+      }
+    }
+  }
+
+  const ihdr = new Uint8Array(13);
+  const ihdrView = new DataView(ihdr.buffer);
+  ihdrView.setUint32(0, kante);
+  ihdrView.setUint32(4, kante);
+  ihdr[8] = 1; // Bittiefe
+  ihdr[9] = 0; // Farbtyp 0 = Graustufen
+  ihdr[10] = 0; // Kompression (Deflate, wie in der Norm festgelegt)
+  ihdr[11] = 0; // Filterverfahren
+  ihdr[12] = 0; // kein Interlacing
+
+  const teile = [
+    SIGNATUR,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", zlibGespeichert(roh)),
+    pngChunk("IEND", new Uint8Array(0)),
+  ];
+  const laenge = teile.reduce((summe, teil) => summe + teil.length, 0);
+  const ergebnis = new Uint8Array(laenge);
+  let position = 0;
+  for (const teil of teile) {
+    ergebnis.set(teil, position);
+    position += teil.length;
+  }
+  return ergebnis;
+}
+
+const SIGNATUR = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+const CRC_TABELLE = (() => {
+  const tabelle = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let wert = n;
+    for (let k = 0; k < 8; k += 1) {
+      wert = wert & 1 ? 0xedb88320 ^ (wert >>> 1) : wert >>> 1;
+    }
+    tabelle[n] = wert >>> 0;
+  }
+  return tabelle;
+})();
+
+/** CRC-32 (wie von PNG für jeden Chunk verlangt). */
+function crc32(daten: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let i = 0; i < daten.length; i += 1) {
+    crc = CRC_TABELLE[(crc ^ daten[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** Adler-32 — Prüfsumme des zlib-Stroms. */
+function adler32(daten: Uint8Array): number {
+  let a = 1;
+  let b = 0;
+  for (let i = 0; i < daten.length; i += 1) {
+    a = (a + daten[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) >>> 0;
+}
+
+/** Ein PNG-Chunk: Länge, Typ, Nutzdaten, CRC-32 (alles Big-Endian). */
+function pngChunk(typ: string, daten: Uint8Array): Uint8Array {
+  const typBytes = new TextEncoder().encode(typ);
+  const inhalt = new Uint8Array(typBytes.length + daten.length);
+  inhalt.set(typBytes);
+  inhalt.set(daten, typBytes.length);
+
+  const kopf = new Uint8Array(4);
+  new DataView(kopf.buffer).setUint32(0, daten.length);
+
+  const pruefsumme = new Uint8Array(4);
+  new DataView(pruefsumme.buffer).setUint32(0, crc32(inhalt));
+
+  const chunk = new Uint8Array(4 + inhalt.length + 4);
+  chunk.set(kopf, 0);
+  chunk.set(inhalt, 4);
+  chunk.set(pruefsumme, 4 + inhalt.length);
+  return chunk;
+}
+
+/** zlib-Strom mit unkomprimierten Deflate-Blöcken (maximal 65535 Byte je Block). */
+function zlibGespeichert(daten: Uint8Array): Uint8Array {
+  const teile: number[] = [0x78, 0x01]; // CMF/FLG: Deflate, keine Voreinstellung
+  let position = 0;
+  do {
+    const laenge = Math.min(65535, daten.length - position);
+    const letzterBlock = position + laenge >= daten.length ? 1 : 0;
+    teile.push(
+      letzterBlock,
+      laenge & 0xff,
+      (laenge >> 8) & 0xff,
+      ~laenge & 0xff,
+      (~laenge >> 8) & 0xff,
+    );
+    for (let i = 0; i < laenge; i += 1) teile.push(daten[position + i]);
+    position += laenge;
+  } while (position < daten.length);
+
+  const pruefsumme = adler32(daten);
+  teile.push(
+    (pruefsumme >>> 24) & 0xff,
+    (pruefsumme >>> 16) & 0xff,
+    (pruefsumme >>> 8) & 0xff,
+    pruefsumme & 0xff,
+  );
+  return new Uint8Array(teile);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Optionen                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Ruhezone in Modulen (mindestens vier, wie die Norm fordert). */
+function ruhezone(wert: number | undefined): number {
+  return Number.isFinite(wert) && (wert as number) >= 4 ? Math.floor(wert as number) : 4;
+}
+
+/** Kantenlänge eines Moduls in Bildpunkten. */
+function modulGroesse(wert: number | undefined): number {
+  return Number.isFinite(wert) ? Math.max(1, Math.floor(wert as number)) : 8;
+}
+
 /** Dateiname für den Download, z. B. "qr-code-kfz-werkstatt-berger.svg". */
 export function qrDateiname(werkstattName: string, endung = "svg"): string {
-  const bereinigt = werkstattName
+  const bereinigt = (typeof werkstattName === "string" ? werkstattName : "")
     .toLowerCase()
     .replace(/ä/g, "ae")
     .replace(/ö/g, "oe")
     .replace(/ü/g, "ue")
     .replace(/ß/g, "ss")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return `qr-code-${bereinigt || "werkstatt"}.${endung}`;
+    .slice(0, 60)
+    .replace(/^-+|-+$/g, "");
+  const saubereEndung = (typeof endung === "string" ? endung : "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  // Nur kurze, reine Buchstaben-/Zahlenendungen übernehmen ("svg", "png") —
+  // alles andere (Pfadangaben, Sonderzeichen) fällt auf "svg" zurück.
+  const endungFinal = /^[a-z0-9]{1,5}$/.test(saubereEndung) ? saubereEndung : "svg";
+  return `qr-code-${bereinigt || "werkstatt"}.${endungFinal}`;
 }
