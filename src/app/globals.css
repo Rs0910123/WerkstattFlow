@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * ---------------------------------------------------------------------------
+ * Branding
+ * ---------------------------------------------------------------------------
+ * --brand ist die EINZIGE Stelle, an der die Akzentfarbe der Plattform steht
+ * (Vorgabe: Petrol). Format: HSL-Triplett "H S% L%" ohne hsl() drumherum,
+ * damit Tailwind-Transparenz (z. B. bg-brand/10) weiter funktioniert.
+ *
+ * Später (Baustein 3) kann die Werkstatt hier ihren eigenen Wert setzen —
+ * z. B. über data-Attribut am <html> oder gespeichert in companies.accent_color:
+ *
+ *   html[data-accent="petrol"]  { --brand: 188 86% 27%; }
+ *   html[data-accent="dunkelblau"] { --brand: 214 72% 30%; }
+ */
+:root {
+  --brand: 188 86% 27%; /* Petrol #0A6E78 */
+  --brand-foreground: 0 0% 100%;
+  --brand-soft: 188 60% 96%;
+
+  --background: 0 0% 100%;
+  --foreground: 215 28% 15%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 215 28% 15%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 215 28% 15%;
+
+  /* Primär = Akzentfarbe (siehe --brand) */
+  --primary: var(--brand);
+  --primary-foreground: var(--brand-foreground);
+
+  --secondary: 190 20% 96%;
+  --secondary-foreground: 215 28% 20%;
+
+  --muted: 210 20% 96%;
+  --muted-foreground: 215 16% 47%;
+
+  --accent: 188 45% 95%;
+  --accent-foreground: 188 86% 21%;
+
+  --destructive: 0 72% 45%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 214 20% 91%;
+  --input: 214 20% 88%;
+  --ring: var(--brand);
+
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Viel Weißraum und ruhige Typografie als Grundton der Plattform. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply tracking-tight;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+}
+
+@layer utilities {
+  /* Mobile-first Lesebreite für lange Texte */
+  .text-balance {
+    text-wrap: balance;
+  }
+}
