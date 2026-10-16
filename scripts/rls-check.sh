@@ -64,7 +64,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "== 1/6 Wegwerf-Datenbank aufsetzen =================================="
+echo "== 1/7 Wegwerf-Datenbank aufsetzen =================================="
 cleanup
 rm -rf "$RUN_DIR"
 mkdir -p "$SOCK_DIR" "$DATA_DIR"
@@ -82,7 +82,7 @@ PSQL="$PGBIN/psql"
 SUPER="run $PSQL -h $SOCK_DIR -p $PGPORT -U postgres -d $DBNAME -v ON_ERROR_STOP=1 -q"
 run "$PGBIN/createdb" -h "$SOCK_DIR" -p "$PGPORT" -U postgres "$DBNAME"
 
-echo "== 2/6 Supabase-Shim + Migrationen + Seed einspielen ================="
+echo "== 2/7 Supabase-Shim + Migrationen + Seed einspielen ================="
 $SUPER -f "$PROJECT_DIR/supabase/tests/000_local_supabase_shim.sql" >/dev/null || {
   echo "FEHLER: Shim fehlgeschlagen." >&2; exit 2; }
 for migration in "$PROJECT_DIR"/supabase/migrations/*.sql; do
@@ -167,7 +167,7 @@ pruefe_fehler() { # <nr> <beschreibung> <ergebnis-oder-fehlertext>
   fi
 }
 
-echo "== 3/6 Prüfungen als Werkstatt 1 (Kfz-Werkstatt Berger) ============="
+echo "== 3/7 Prüfungen als Werkstatt 1 (Kfz-Werkstatt Berger) ============="
 pruefe 1  "W1 sieht nur eigene Kunden"            "5" "$(as_user "$USER_A" "select count(*) from public.customers;")"
 pruefe 2  "W1 sieht nur eigene Fahrzeuge"         "4" "$(as_user "$USER_A" "select count(*) from public.vehicles;")"
 pruefe 3  "W1 sieht nur eigene Anfragen"          "5" "$(as_user "$USER_A" "select count(*) from public.requests;")"
@@ -198,7 +198,7 @@ pruefe 25 "auth.users ist für angemeldete Benutzer nicht lesbar" "1" "$(as_user
 pruefe 26 "Storage: W1 sieht nur die eigene Datei" "1" "$(as_user "$USER_A" "select count(*) from storage.objects;")"
 pruefe 27 "Storage: W1 sieht keine Datei von Mandant 2" "0" "$(as_user "$USER_A" "select count(*) from storage.objects where name like '$COMPANY_B/%';")"
 
-echo "== 4/6 Prüfungen als Werkstatt 2 (Zweirad Technik Nord) ============="
+echo "== 4/7 Prüfungen als Werkstatt 2 (Zweirad Technik Nord) ============="
 pruefe 28 "W2 sieht nur eigene Kunden"            "2" "$(as_user "$USER_B" "select count(*) from public.customers;")"
 pruefe 29 "W2 sieht nur eigene Fahrzeuge"         "1" "$(as_user "$USER_B" "select count(*) from public.vehicles;")"
 pruefe 30 "W2 sieht nur eigene Anfragen"          "1" "$(as_user "$USER_B" "select count(*) from public.requests;")"
@@ -210,7 +210,7 @@ pruefe 35 "W2 sieht keine Verfügbarkeiten von Mandant 1" "7" "$(as_user "$USER_
 pruefe 36 "UPDATE auf Anfrage von Mandant 1 ändert nichts" "0" "$(as_user "$USER_B" "with u as (update public.requests set status = 'storniert' where id = '$REQ_A' returning 1) select count(*) from u;")"
 pruefe 37 "Storage: W2 sieht nur die eigene Datei" "1" "$(as_user "$USER_B" "select count(*) from storage.objects;")"
 
-echo "== 5/6 Prüfungen als nicht angemeldeter Besucher (anon) ============="
+echo "== 5/7 Prüfungen als nicht angemeldeter Besucher (anon) ============="
 pruefe 38 "anon hat kein SELECT-Recht auf customers" "false" "$(as_anon "select has_table_privilege('anon', 'public.customers', 'select')::text;")"
 pruefe 39 "anon hat kein SELECT-Recht auf requests"  "false" "$(as_anon "select has_table_privilege('anon', 'public.requests', 'select')::text;")"
 pruefe 40 "anon hat kein INSERT-Recht auf requests"  "false" "$(as_anon "select has_table_privilege('anon', 'public.requests', 'insert')::text;")"
@@ -222,7 +222,7 @@ pruefe 45 "Statusabfrage gibt keine Kunden- oder Werkstattdaten preis" "0" "$(as
 pruefe 46 "Demo-Login-Passwort der Beispiel-Werkstatt ist gültig" "1" "$PW_OK"
 pruefe 47 "Zweiter Demo-Mandant hat ein eigenes Unternehmen (Trigger greift)" "2" "$($SUPER -t -A -c "select count(*) from public.companies")"
 
-echo "== 6/6 Öffentliches Kundenportal (nicht angemeldeter Besucher) ========"
+echo "== 6/7 Öffentliches Kundenportal (nicht angemeldeter Besucher) ========"
 # Erwartungswerte direkt aus den Basistabellen ableiten — damit prüfen wir die
 # Funktionen gegen die echten Daten und nicht gegen hartcodierte Zahlen.
 SLUG_A="kfz-werkstatt-berger"
@@ -278,6 +278,66 @@ pruefe 79 "die Anfrage hängt am richtigen Mandanten (Status neu, Quelle online)
 pruefe 80 "Kunde und Fahrzeug werden dabei angelegt" "1" "$($SUPER -t -A -c "select count(*) from public.customers cu join public.vehicles v on v.customer_id = cu.id where cu.email = 'test.kundin@example.com' and upper(v.license_plate) = 'WU-TEST 1'")"
 pruefe 81 "eine zweite Anfrage in derselben Minute wird abgewiesen" "1" "$(as_anon "select count(*) from public.create_public_request('$SLUG_A', 'Ölwechsel', null, current_date + 2, null, 'Test', 'Kundin', 'test.kundin@example.com', null, 'email', 'Volkswagen', 'Golf 7', 2019, 98000, 'WU-TEST 1', 100, 200, null);" 2>&1 | grep -ci 'zu_schnell')"
 pruefe 82 "anon bekommt über current_company_id() keine Werkstatt genannt" "true" "$(as_anon "select (public.current_company_id() is null)::text;")"
+
+echo "== 7/7 Werkstatt-Weg: Anfragen bearbeiten (Baustein 3, Teil A) ========"
+# Bestätigen, Ablehnen, Abschließen und Stornieren laufen über die Funktionen
+# confirm_request / reject_request / set_request_status (Migration
+# 20260101000500). Sie sind SECURITY INVOKER — es gilt also die RLS des
+# angemeldeten Benutzers. Genau das wird hier geprüft: Werkstatt 2 darf an den
+# Daten von Werkstatt 1 nichts sehen und nichts ändern, Werkstatt 1 an ihren
+# eigenen Daten alles (Gegenprobe).
+CUST_A="$($SUPER -t -A -c "select customer_id from public.requests where id = '$REQ_A'")"
+TERMIN_ZIEL="$($SUPER -t -A -c "select (current_date + 2)::text")"
+# Die über das öffentliche Portal angelegte Anfrage (Prüfung 78) ist noch offen
+# und dient unten als zweiter Fall für Kollision, Bestätigen und Abschließen.
+REQ_OE="$($SUPER -t -A -c "select id from public.requests where company_id = '$COMPANY_A' and service_type = 'Ölwechsel' and status = 'neu' order by created_at desc limit 1")"
+
+echo "   -- Werkstatt 2 greift auf die Anfrage von Werkstatt 1 zu --"
+pruefe 83  "W2 sieht die Anfrage von W1 nicht" "0" "$(as_user "$USER_B" "select count(*) from public.requests where id = '$REQ_A';")"
+pruefe 84  "W2 kann die Anfrage von W1 nicht bestätigen" "1" "$(as_user "$USER_B" "select count(*) from public.confirm_request('$REQ_A', '$TERMIN_ZIEL'::date, '07:30'::time, 60, 'Fremde Bühne', null);" 2>&1 | grep -ci 'anfrage_unbekannt')"
+pruefe 85  "W2 kann die Anfrage von W1 nicht ablehnen" "1" "$(as_user "$USER_B" "select count(*) from public.reject_request('$REQ_A', 'Fremder Grund');" 2>&1 | grep -ci 'anfrage_unbekannt')"
+pruefe 86  "W2 kann die Anfrage von W1 weder abschließen noch stornieren" "1" "$(as_user "$USER_B" "select count(*) from public.set_request_status('$REQ_A', 'storniert');" 2>&1 | grep -ci 'anfrage_unbekannt')"
+pruefe 87  "der Status der Anfrage von W1 ist dabei unverändert geblieben" "neu" "$($SUPER -t -A -c "select status from public.requests where id = '$REQ_A'")"
+pruefe 88  "W2 hat keinen Entscheidungszeitpunkt gesetzt (decided_at bleibt leer)" "1" "$($SUPER -t -A -c "select count(*) from public.requests where id = '$REQ_A' and decided_at is null")"
+pruefe 89  "für die Anfrage von W1 ist kein Termin entstanden" "0" "$($SUPER -t -A -c "select count(*) from public.appointments where request_id = '$REQ_A'")"
+pruefe 90  "W2 kann die Anfrage von W1 nicht auf sich umbiegen" "0" "$(as_user "$USER_B" "with u as (update public.requests set company_id = '$COMPANY_B' where id = '$REQ_A' returning 1) select count(*) from u;")"
+pruefe 91  "W2 kann fremde Anfragen auch direkt in der Tabelle nicht ändern" "0" "$(as_user "$USER_B" "with u as (update public.requests set status = 'bestaetigt', decided_at = now() where id = '$REQ_A' returning 1) select count(*) from u;")"
+pruefe 92  "W2 kann keinen Termin für Mandant 1 anlegen (RLS-Abweisung)" "1" "$(as_user "$USER_B" "with i as (insert into public.appointments (company_id, request_id, customer_id, title, starts_at, ends_at) values ('$COMPANY_A', '$REQ_A', '$CUST_A', 'Fremdtermin', now(), now() + interval '1 hour') returning 1) select count(*) from i;" 2>&1 | grep -ci 'row-level security')"
+pruefe 93  "W2 kann keine Anfrage für Mandant 1 anlegen (RLS-Abweisung)" "1" "$(as_user "$USER_B" "with i as (insert into public.requests (company_id, customer_id, service_type) values ('$COMPANY_A', '$CUST_A', 'Fremdauftrag') returning 1) select count(*) from i;" 2>&1 | grep -ci 'row-level security')"
+pruefe 94  "W2 kann den bestehenden Termin von Mandant 1 nicht absagen" "0" "$(as_user "$USER_B" "with u as (update public.appointments set status = 'abgesagt' where company_id = '$COMPANY_A' returning 1) select count(*) from u;")"
+
+echo "   -- Inbox: jede Werkstatt sieht ausschließlich eigene Anfragen --"
+pruefe 95  "Inbox von W1 enthält ausschließlich eigene Anfragen" "0" "$(as_user "$USER_A" "select count(*) from public.requests where company_id <> '$COMPANY_A';")"
+pruefe 96  "Inbox von W2 enthält ausschließlich eigene Anfragen" "0" "$(as_user "$USER_B" "select count(*) from public.requests where company_id <> '$COMPANY_B';")"
+pruefe 97  "Inbox von W1 zeigt vollständig, was Mandant 1 gehört" "$($SUPER -t -A -c "select count(*) from public.requests where company_id = '$COMPANY_A'")" "$(as_user "$USER_A" "select count(*) from public.requests;")"
+pruefe 98  "die Anfrage von W1 taucht in der Inbox von W2 nicht auf" "0" "$(as_user "$USER_B" "select count(*) from public.requests where id = '$REQ_A';")"
+pruefe 99  "W1 sieht die Anfrage des zweiten Mandanten nicht" "0" "$(as_user "$USER_A" "select count(*) from public.requests where company_id = '$COMPANY_B';")"
+
+echo "   -- Gegenprobe: Werkstatt 1 bearbeitet ihre EIGENE Anfrage --"
+pruefe 100 "W1 bestätigt die eigene Anfrage — der Aufruf gelingt" "1" "$(as_user "$USER_A" "select count(*) from public.confirm_request('$REQ_A', '$TERMIN_ZIEL'::date, '07:30'::time, 60, 'Bühne 1', 'Probe aus dem Prüflauf');")"
+pruefe 101 "die Anfrage steht nun auf bestätigt (mit Entscheidungszeitpunkt)" "1" "$($SUPER -t -A -c "select count(*) from public.requests where id = '$REQ_A' and status = 'bestaetigt' and decided_at is not null")"
+pruefe 102 "der zugehörige Termin gehört zu Mandant 1 und ist bestätigt" "1" "$($SUPER -t -A -c "select count(*) from public.appointments where request_id = '$REQ_A' and company_id = '$COMPANY_A' and status = 'bestaetigt'")"
+pruefe 103 "der Termin startet um 07:30 Uhr in der Zeitzone der Werkstatt" "07:30" "$($SUPER -t -A -c "select to_char(starts_at at time zone (select timezone from public.companies where id = '$COMPANY_A'), 'HH24:MI') from public.appointments where request_id = '$REQ_A'")"
+pruefe 104 "ein zweites Bestätigen derselben Anfrage wird abgewiesen" "1" "$(as_user "$USER_A" "select count(*) from public.confirm_request('$REQ_A', '$TERMIN_ZIEL'::date, '10:00'::time, 60, null, null);" 2>&1 | grep -ci 'status_ungueltig')"
+pruefe 105 "daraus ist kein zweiter Termin entstanden" "1" "$($SUPER -t -A -c "select count(*) from public.appointments where request_id = '$REQ_A'")"
+pruefe 106 "eine bereits bestätigte Anfrage lässt sich nicht mehr ablehnen" "1" "$(as_user "$USER_A" "select count(*) from public.reject_request('$REQ_A', 'Zu spät');" 2>&1 | grep -ci 'status_ungueltig')"
+pruefe 107 "die Ablehnung wurde nicht gespeichert" "1" "$($SUPER -t -A -c "select count(*) from public.requests where id = '$REQ_A' and status = 'bestaetigt' and rejection_reason is null")"
+pruefe 108 "ein Termin zur selben Zeit wird als Kollision abgewiesen" "1" "$(as_user "$USER_A" "select count(*) from public.confirm_request('$REQ_OE', '$TERMIN_ZIEL'::date, '07:45'::time, 60, null, null);" 2>&1 | grep -ci 'termin_kollision')"
+pruefe 109 "durch die Kollision ist kein Termin entstanden" "0" "$($SUPER -t -A -c "select count(*) from public.appointments where request_id = '$REQ_OE'")"
+pruefe 110 "ein freier Zeitpunkt derselben Anfrage wird angenommen" "1" "$(as_user "$USER_A" "select count(*) from public.confirm_request('$REQ_OE', '$TERMIN_ZIEL'::date, '10:00'::time, 30, 'Bühne 2', null);")"
+pruefe 111 "die zweite Anfrage ist bestätigt und hat ihren Termin" "1" "$($SUPER -t -A -c "select count(*) from public.appointments a join public.requests r on r.id = a.request_id where a.request_id = '$REQ_OE' and r.status = 'bestaetigt' and a.status = 'bestaetigt'")"
+pruefe 112 "Ablehnen ohne Begründung wird abgewiesen" "1" "$(as_user "$USER_A" "select count(*) from public.reject_request('eeeeeeee-0000-4000-8000-000000000002', '   ');" 2>&1 | grep -ci 'begruendung_fehlt')"
+pruefe 113 "W1 lehnt eine eigene offene Anfrage mit Begründung ab" "1" "$(as_user "$USER_A" "select count(*) from public.reject_request('eeeeeeee-0000-4000-8000-000000000002', 'Keine Kapazität im Wunschzeitraum.');")"
+pruefe 114 "die Begründung ist gespeichert (der Kunde sieht sie)" "1" "$($SUPER -t -A -c "select count(*) from public.requests where id = 'eeeeeeee-0000-4000-8000-000000000002' and status = 'abgelehnt' and rejection_reason = 'Keine Kapazität im Wunschzeitraum.'")"
+pruefe 115 "eine abgelehnte Anfrage lässt sich nicht mehr abschließen" "1" "$(as_user "$USER_A" "select count(*) from public.set_request_status('eeeeeeee-0000-4000-8000-000000000002', 'abgeschlossen');" 2>&1 | grep -ci 'status_ungueltig')"
+pruefe 116 "W1 schließt einen bestätigten Auftrag ab" "1" "$(as_user "$USER_A" "select count(*) from public.set_request_status('$REQ_OE', 'abgeschlossen') where appointment_status = 'abgeschlossen';")"
+pruefe 117 "der zugehörige Termin steht ebenfalls auf abgeschlossen" "1" "$($SUPER -t -A -c "select count(*) from public.appointments where request_id = '$REQ_OE' and status = 'abgeschlossen'")"
+pruefe 118 "W1 storniert die bestätigte Anfrage, der Termin wird abgesagt" "1" "$(as_user "$USER_A" "select count(*) from public.set_request_status('$REQ_A', 'storniert') where appointment_status = 'abgesagt';")"
+pruefe 119 "der Termin ist in der Datenbank tatsächlich abgesagt" "1" "$($SUPER -t -A -c "select count(*) from public.appointments where request_id = '$REQ_A' and status = 'abgesagt'")"
+pruefe 120 "der Entscheidungszeitpunkt bleibt beim Stornieren erhalten" "1" "$($SUPER -t -A -c "select count(*) from public.requests where id = '$REQ_A' and status = 'storniert' and decided_at is not null and rejection_reason is null")"
+pruefe 121 "W2 sieht nach alldem weiterhin nur seine eigene Anfrage" "1" "$(as_user "$USER_B" "select count(*) from public.requests;")"
+pruefe 122 "anon darf die Bearbeitungsfunktionen nicht ausführen" "false" "$(as_anon "select (has_function_privilege('anon', 'public.confirm_request(uuid,date,time,integer,text,text)', 'execute') or has_function_privilege('anon', 'public.reject_request(uuid,text)', 'execute') or has_function_privilege('anon', 'public.set_request_status(uuid,text)', 'execute'))::text;")"
+pruefe 123 "die Bearbeitungsfunktionen laufen nicht als SECURITY DEFINER" "0" "$($SUPER -t -A -c "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('confirm_request','reject_request','set_request_status') and p.prosecdef")"
 
 echo
 echo "======================================================================"
