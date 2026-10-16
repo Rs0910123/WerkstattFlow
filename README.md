@@ -225,9 +225,10 @@ eines Fehlers. Ein unbekannter Slug führt auf eine saubere 404-Seite.
 
 ### Prüfen und testen (ohne Supabase)
 
-    npm test          # 158 Tests der Logikschicht (Kalender, Preisschätzung,
-                      # Formularprüfung, Token, Farbe, Formatierung sowie
-                      # Statusübergänge, Terminprüfung und Inbox des Dashboards)
+    npm test          # 192 Tests der Logikschicht (Kalender, Preisschätzung,
+                      # Formularprüfung, Token, Farbe, Formatierung, QR-Encoder
+                      # sowie Statusübergänge, Terminprüfung und Inbox des
+                      # Dashboards)
     npx tsc --noEmit  # Typecheck
     npm run build     # Production-Build (Vercel-fähig)
     npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade +
@@ -235,6 +236,30 @@ eines Fehlers. Ein unbekannter Slug führt auf eine saubere 404-Seite.
                       # baut lokal ein Postgres auf und prüft 123 Punkte
 
 `npm run rls:check` braucht ein lokales PostgreSQL (Paket `postgresql`).
+
+### QR-Code des Werkstattlinks prüfen
+`src/lib/dashboard/qr.ts` erzeugt den QR-Code zum Werkstattlink als SVG (Download
+in den Einstellungen) und als PNG. Ob die Codes wirklich scannbar sind, lässt
+sich nicht mit einem Unit-Test belegen, sondern nur mit einem echten Decoder: Das
+Prüfskript schreibt jeden Fall als PNG und als SVG, rastert das SVG und liest
+beides mit `zbar` zurück.
+
+    # Einmalig, nur zum Prüfen (bewusst KEINE Projektabhängigkeit):
+    sudo apt-get install -y zbar-tools librsvg2-bin
+    node --experimental-strip-types scripts/qr-zbar-pruefen.ts
+
+Gemessenes Ergebnis (Stand 15.10.2026): **123 Fälle**, davon
+**PNG (zbar) 123/123** und **SVG → rsvg-convert → PNG (zbar) 123/123** exakt
+zurückgelesen, **0 Fehlschläge**. Die Fälle sind die Referenzfälle aus
+`tests/dashboard/qr-referenz.json` (erzeugt mit dem Referenzwerkzeug `segno`,
+Versionen 1–10, Stufen L/M/Q/H, alle acht Masken, Kapazitätsgrenzen) plus die im
+Betrieb vorkommenden Formen: öffentlicher Werkstattlink, lange URL mit
+Parametern, Umlaute.
+
+`zbarimg` (Paket `zbar-tools`), `rsvg-convert` (Paket `librsvg2-bin`) und `segno`
+(Python) sind reine **Prüfwerkzeuge**: Sie stehen weder in `package.json` noch in
+`node_modules` und werden für Betrieb oder Deployment nicht gebraucht. Wer das
+Skript nicht ausführt, braucht sie nicht zu installieren.
 
 **Zwei Werkstätten zum Prüfen der Datentrennung:** Die Demo-Daten enthalten die
 Kfz-Werkstatt Berger und den zweiten Mandanten „Zweirad Technik Nord“. Beide

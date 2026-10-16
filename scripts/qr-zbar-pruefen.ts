@@ -86,12 +86,21 @@ function optionenFuer(fall: ReferenzFall): SvgOptionen {
   return optionen;
 }
 
+/**
+ * zbarimg gibt bei jedem Aufruf zwei Zeilen D-Bus-Rauschen auf stderr aus
+ * ("Connection Null" / "Connection Error ...") — auf diesem Rechner gibt es
+ * keinen Systembus, und zbar braucht auch keinen, um ein Bild zu lesen.
+ * execFileSync leitet stderr des Kindprozesses standardmäßig auf unser stderr
+ * weiter; deshalb wird es hier ausdrücklich verworfen, damit die Prüfausgabe
+ * lesbar bleibt. Ausgewertet wird ausschließlich stdout.
+ */
+const STILLE_STDIO: ["ignore", "pipe", "ignore"] = ["ignore", "pipe", "ignore"];
 function lese(datei: string): string {
   try {
-    return execFileSync("zbarimg", ["--raw", "-q", datei], { encoding: "utf8" }).replace(
-      /\n$/,
-      "",
-    );
+    return execFileSync("zbarimg", ["--raw", "-q", datei], {
+      encoding: "utf8",
+      stdio: STILLE_STDIO,
+    }).replace(/\n$/, "");
   } catch {
     return "<nicht gelesen>";
   }
@@ -106,7 +115,7 @@ for (const fall of faelle) {
   const basis = `${verzeichnis}/${fall.gruppe}-${fall.name}`;
   writeFileSync(`${basis}.png`, qrAlsPng(fall.text, optionen));
   writeFileSync(`${basis}.svg`, qrAlsSvg(fall.text, optionen));
-  execFileSync("rsvg-convert", ["-o", `${basis}-svg.png`, `${basis}.svg`]);
+  execFileSync("rsvg-convert", ["-o", `${basis}-svg.png`, `${basis}.svg`], { stdio: STILLE_STDIO });
 
   const ausPng = lese(`${basis}.png`);
   const ausSvg = lese(`${basis}-svg.png`);
