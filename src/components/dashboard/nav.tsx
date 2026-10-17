@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Inbox, LayoutDashboard, Settings } from "lucide-react";
+import { CalendarDays, Inbox, LayoutDashboard, QrCode, Settings } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";

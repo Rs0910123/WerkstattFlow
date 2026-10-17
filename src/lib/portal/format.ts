@@ -207,6 +207,46 @@ export function formatiereZeitstempel(
   )}:${wert_("minute")} Uhr`;
 }
 
+/**
+ * Zerlegt einen Zeitstempel aus der Datenbank (ISO mit Zeitzone, z. B.
+ * "2026-03-29T01:30:00Z") in die naive Werkstatt-Zeit:
+ * Tag ("YYYY-MM-DD"), Uhrzeit ("HH:MM") und Minute seit Mitternacht.
+ *
+ * Damit landet ein Termin im Kalender der Werkstatt an dem Tag, an dem die
+ * Werkstatt ihn erlebt — nicht an dem Tag, an dem der Server (z. B. Vercel in
+ * UTC) gerade steht. Nutzt dieselbe Zeitzonenrechnung wie jetztInZeitzone(),
+ * es gibt also keine zweite Zeitlogik im Projekt.
+ *
+ * Ungültige oder leere Werte ergeben null.
+ */
+export function zerlegeInWerkstattZeit(
+  wert: string | null | undefined,
+  zeitzone = "Europe/Berlin",
+): { tag: string; zeit: string; minute: number; zeitzone: string } | null {
+  if (!wert) return null;
+  const datum = new Date(wert);
+  if (Number.isNaN(datum.getTime())) return null;
+
+  const naiv = jetztInZeitzone(zeitzone, datum); // "YYYY-MM-DDTHH:MM"
+  const { tag, zeit } = normalisiereTageszeit(naiv);
+  return { tag, zeit, minute: uhrzeitZuMinuten(zeit) ?? 0, zeitzone };
+}
+
+/**
+ * Sicherheitsnetz für die Tagesgrenze: Manche JavaScript-Laufzeiten liefern für
+ * Mitternacht "24:00" statt "00:00" (Stundenzählung 1–24). In der 24er-Zählung
+ * gehört "24:00" aber bereits zum Folgetag — genau das rechnen wir hier um.
+ */
+export function normalisiereTageszeit(naiv: string): { tag: string; zeit: string } {
+  const treffer = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(naiv);
+  if (!treffer) return { tag: "—", zeit: "—" };
+  const [, jahr, monat, tag, stunde, minute] = treffer;
+  if (stunde === "24") {
+    return { tag: datumPlusTage(`${jahr}-${monat}-${tag}`, 1), zeit: "00:00" };
+  }
+  return { tag: `${jahr}-${monat}-${tag}`, zeit: `${stunde}:${minute}` };
+}
+
 /** Naive Werkstatt-Zeit ("2026-10-06T08:00:00") als "06.10.2026, 08:00 Uhr". */
 export function formatiereNaiveZeit(wert: string | null | undefined): string {
   if (!wert) return "—";
