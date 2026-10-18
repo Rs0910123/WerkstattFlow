@@ -225,15 +225,15 @@ eines Fehlers. Ein unbekannter Slug führt auf eine saubere 404-Seite.
 
 ### Prüfen und testen (ohne Supabase)
 
-    npm test          # 192 Tests der Logikschicht (Kalender, Preisschätzung,
+    npm test          # 225 Tests der Logikschicht (Kalender, Preisschätzung,
                       # Formularprüfung, Token, Farbe, Formatierung, QR-Encoder
-                      # sowie Statusübergänge, Terminprüfung und Inbox des
-                      # Dashboards)
+                      # sowie Statusübergänge, Terminprüfung, Inbox des
+                      # Dashboards und Terminübersicht/Kalenderlogik)
     npx tsc --noEmit  # Typecheck
     npm run build     # Production-Build (Vercel-fähig)
     npm run rls:check # Mandanten-Trennung + öffentliche Zugriffspfade +
-                      # Bearbeiten im Werkstatt-Dashboard:
-                      # baut lokal ein Postgres auf und prüft 123 Punkte
+                      # Bearbeiten im Werkstatt-Dashboard + Kalenderdaten:
+                      # baut lokal ein Postgres auf und prüft 132 Punkte
 
 `npm run rls:check` braucht ein lokales PostgreSQL (Paket `postgresql`).
 
@@ -311,6 +311,39 @@ Zum Nachlesen im Code: Die Logik (Statusübergänge, Kollisionsprüfung, Filter,
 Sortierung, Kennzahlen, Anzeigetexte) steht in `src/lib/dashboard/anfragen.ts`
 und ist mit `npm test` abgedeckt; die Datenbank-Funktionen liegen in
 `supabase/migrations/20260101000500_dashboard_request_actions.sql`.
+
+### Terminübersicht und Kundenlink-QR (Baustein 3, Teil B1b)
+
+**Terminübersicht** — `/dashboard/kalender`. Monatsansicht mit Blättern
+(„vorheriger/nächster Monat“, „Heute“); jeder Tag zeigt die Zahl der Termine
+und der offenen Anfragen, deren Wunschzeitraum diesen Tag enthält. Ein Klick auf
+einen Tag öffnet darunter das **Tagesdetail**: alle Termine des Tages mit
+Uhrzeit, Kunde, Fahrzeug und Leistung sowie die offenen Anfragen mit
+Wunschzeitraum. Ein Termin gehört zu dem Tag, an dem er **in der Zeitzone der
+Werkstatt** beginnt; Termine über Mitternacht sind als solche gekennzeichnet.
+
+**Kundenlink + QR-Download** — `/dashboard/kundenlink`. Zeigt den öffentlichen
+Link der Werkstatt (`/w/<slug>`) zum Kopieren und denselben Link als QR-Code.
+Der QR-Code lässt sich als **SVG** (scharf für Druck) und als **PNG**
+(für Chat, E-Mail, Social Media) herunterladen; beide Dateien entstehen auf
+Knopfdruck über die Route `/dashboard/kundenlink/qr/[format]`
+(`svg` bzw. `png`) und tragen einen sprechenden Dateinamen
+(`werkstattflow-<slug>.svg` / `.png`). Erzeugt wird der Code mit der geprüften
+Bibliothek `qrcode` über die schmale Fassade `src/lib/dashboard/qr.ts`.
+
+Wie das geprüft ist:
+
+* `tests/dashboard/kalender.test.ts` — 33 Prüfungen der Kalenderlogik:
+  Monatsraster (42 Zellen, erster Wochentag, Monats-/Jahreswechsel, Schaltjahr),
+  Zuordnung von Terminen und offenen Anfragen zum richtigen Tag, Sortierung,
+  Kennzahlen sowie Zeitzonen- und Sommerzeit-Grenzfälle für `Europe/Berlin`
+  (Umstellung am 29.03.2026 und 25.10.2026).
+* `scripts/rls-check.sh` — Prüfungen 124–132 stellen die beiden Abfragen der
+  Terminübersicht nach: Werkstatt A sieht keine Termine und keine
+  Wunschzeiträume von Werkstatt B, jede Werkstatt sieht ihre eigenen Daten
+  vollständig, und `anon` kommt an keine Termindaten.
+* `scripts/qr-zbar-pruefen.ts` — liest die erzeugten Codes mit einem echten
+  Scanner zurück (siehe oben).
 
 ## Der Kundenweg (Baustein 2, Teil B) — vollständig
 

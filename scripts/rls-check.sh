@@ -339,6 +339,37 @@ pruefe 121 "W2 sieht nach alldem weiterhin nur seine eigene Anfrage" "1" "$(as_u
 pruefe 122 "anon darf die Bearbeitungsfunktionen nicht ausführen" "false" "$(as_anon "select (has_function_privilege('anon', 'public.confirm_request(uuid,date,time,integer,text,text)', 'execute') or has_function_privilege('anon', 'public.reject_request(uuid,text)', 'execute') or has_function_privilege('anon', 'public.set_request_status(uuid,text)', 'execute'))::text;")"
 pruefe 123 "die Bearbeitungsfunktionen laufen nicht als SECURITY DEFINER" "0" "$($SUPER -t -A -c "select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname in ('confirm_request','reject_request','set_request_status') and p.prosecdef")"
 
+echo "== 8/8 Terminübersicht: Kalenderdaten (Baustein 3, Teil B1b) ========="
+# Die Terminübersicht (src/lib/dashboard/kalender-daten.ts) fragt zwei Dinge ab:
+# Termine der eigenen Werkstatt im Zeitraum (Überschneidung von starts_at und
+# ends_at) und die noch offenen Anfragen mit Wunschzeitraum. Beides läuft mit
+# der Sitzung des angemeldeten Benutzers; die Trennung macht die RLS. Hier
+# werden genau diese beiden Abfragen nachgestellt — je einmal als Werkstatt 1,
+# einmal als Werkstatt 2 und einmal als anon.
+CAL_VON="$($SUPER -t -A -c "select (current_date - 61)::text || 'T00:00:00.000Z'")"
+CAL_BIS="$($SUPER -t -A -c "select (current_date + 61)::text || 'T23:59:59.999Z'")"
+echo "   -- Kalenderabfrage der Werkstatt (Zeitraum wie im Dashboard) --"
+pruefe 124 "W1 sieht im Kalenderzeitraum ausschließlich eigene Termine" "0" \
+  "$(as_user "$USER_A" "select count(*) from public.appointments where starts_at <= '$CAL_BIS'::timestamptz and ends_at >= '$CAL_VON'::timestamptz and company_id <> '$COMPANY_A';")"
+pruefe 125 "W1 sieht im Kalenderzeitraum vollständig die Termine von Mandant 1" \
+  "$($SUPER -t -A -c "select count(*) from public.appointments where company_id = '$COMPANY_A' and starts_at <= '$CAL_BIS'::timestamptz and ends_at >= '$CAL_VON'::timestamptz")" \
+  "$(as_user "$USER_A" "select count(*) from public.appointments where starts_at <= '$CAL_BIS'::timestamptz and ends_at >= '$CAL_VON'::timestamptz;")"
+pruefe 126 "W2 sieht den (stornierten) Termin von W1 auch im Kalender nicht" "0" \
+  "$(as_user "$USER_B" "select count(*) from public.appointments where request_id = '$REQ_A';")"
+pruefe 127 "W2 sieht im Kalenderzeitraum ausschließlich eigene Termine" "0" \
+  "$(as_user "$USER_B" "select count(*) from public.appointments where starts_at <= '$CAL_BIS'::timestamptz and ends_at >= '$CAL_VON'::timestamptz and company_id <> '$COMPANY_B';")"
+echo "   -- Offene Anfragen mit Wunschzeitraum (Tagesdetail) --"
+pruefe 128 "W1 sieht keinen Wunschzeitraum von Mandant 2" "0" \
+  "$(as_user "$USER_A" "select count(*) from public.requests where company_id = '$COMPANY_B' and (preferred_date_from is not null or preferred_date_to is not null);")"
+pruefe 129 "W2 sieht keinen Wunschzeitraum von Mandant 1" "0" \
+  "$(as_user "$USER_B" "select count(*) from public.requests where company_id = '$COMPANY_A' and (preferred_date_from is not null or preferred_date_to is not null);")"
+echo "   -- anon kommt an keine Kalenderdaten --"
+pruefe 130 "anon kann Termine auch mit Zeitraumfilter nicht lesen" "1" \
+  "$(as_anon "select count(*) from public.appointments where starts_at <= '$CAL_BIS'::timestamptz and ends_at >= '$CAL_VON'::timestamptz;" 2>&1 | grep -ci 'permission denied')"
+pruefe 131 "anon kann Anfragen mit Wunschzeitraum nicht lesen" "1" \
+  "$(as_anon "select count(*) from public.requests where preferred_date_from is not null or preferred_date_to is not null;" 2>&1 | grep -ci 'permission denied')"
+pruefe 132 "anon hat kein Spaltenrecht auf appointments.starts_at" "false" \
+  "$(as_anon "select has_column_privilege('anon', 'public.appointments', 'starts_at', 'select')::text;")"
 echo
 echo "======================================================================"
 echo " ERGEBNIS: $PASSED bestanden, $FAILED fehlgeschlagen"
